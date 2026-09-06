@@ -2,14 +2,17 @@
 #include <cstdint>
 #include <thread>
 
-void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t N, const std::float16_t* matrix, const std::float16_t* vector, std::float16_t* results) {
+void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t N, const std::float16_t* __restrict__ matrix, const std::float16_t* __restrict__ vector, std::float16_t* __restrict__  results) {
     std::float32_t sum;
-    for(uint32_t w=0; w<work; w++) {
+    uint32_t localOffset = offset * N;
+    uint32_t endIndex = offset+work;
+    for(uint32_t w=offset; w<endIndex; w++) {
         sum = 0.0f;
         for(uint32_t i=0; i<N; i++) {
-            sum += static_cast<std::float32_t>(matrix[(offset+w)*N + i])*static_cast<std::float32_t>(vector[i]);
+            sum += static_cast<std::float32_t>(matrix[localOffset + i])*static_cast<std::float32_t>(vector[i]);
         }
-        results[offset+w] = static_cast<std::float16_t>(sum);
+        results[w] = static_cast<std::float16_t>(sum);
+        localOffset += N;
     }
 }
 
@@ -38,7 +41,9 @@ void GeMV(uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t* mat, std::
     }
 
     for(uint8_t i=0; i<numThreads; i++) {
-        threadParams[i].flag.wait(ExecutionState::WORKING);
+        while(threadParams[i].flag.load() == ExecutionState::WORKING) {
+            threadParams[i].flag.wait(ExecutionState::WORKING);
+        }
     }
     
     for(uint8_t i=0; i<numThreads; i++) {
@@ -50,28 +55,44 @@ void GeMV(uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t* mat, std::
     }
 }
 
-/*
+
 #include <iostream>
 #include <cstring>
-int main() {
-    uint8_t numThreads = std::thread::hardware_concurrency()==0 ? 1 : std::thread::hardware_concurrency();
+#include <fstream>
+int main(int argc, char* argv[]) {
+    if(argc<3) {std::cerr << "not enough arguments (must provide matrix file and vector file)" << std::endl; exit(-1);}
 
-    const uint32_t M = 2; // num matrix rows
-    const uint32_t N = 3; // num matrix cols
-    std::float16_t* mat = new std::float16_t[M*N]{0.5f16, -0.2f16, 0.1f16, 1.5f16, 0.0f16, -0.5f16};
-    std::float16_t* vec = new std::float16_t[N]{1.0f16, 2.0f16, -1.0f16};
+    std::ifstream vectorFile(argv[1], std::ios::binary);
+    std::ifstream matrixFile(argv[2], std::ios::binary);
 
-    std::float16_t* result = new std::float16_t[M];
+    uint32_t M; // num matrix rows
+    uint32_t N; // num matrix cols
+    matrixFile.read(reinterpret_cast<char*>(&M), sizeof(uint32_t));
+    matrixFile.read(reinterpret_cast<char*>(&N), sizeof(uint32_t));
+    {
+        uint32_t vectorN;
+        vectorFile.read(reinterpret_cast<char*>(&vectorN), sizeof(uint32_t));
+        if(N!=vectorN) {std::cerr << "vector and matrix dimensions are not compatible" << std::endl; exit(-1);}
+    }
+
+    std::float16_t* mat = new std::float16_t[M*N];
+    std::float16_t* vec = new std::float16_t[N];
+    matrixFile.read(reinterpret_cast<char*>(mat), sizeof(std::float16_t)*M*N);
+    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*N);
+
+    std::float16_t* result = new std::float16_t[M]{};
     std::memset(result, 0x00, M*sizeof(std::float16_t));
+
+    uint8_t numThreads = std::min(std::thread::hardware_concurrency()==0 ? 1 : std::thread::hardware_concurrency(), M);
 
     GeMV(numThreads, M, N, mat, vec, result);
 
-    for(uint8_t i=0; i<M; i++) {
+    for(uint32_t i=0; i<M; i++) {
         std::cout << result[i] << std::endl;
     }
+    // TODO: use this output to verify the answers for smaller matrices
 
     delete[] mat;
     delete[] vec;
     delete[] result;
 }
-*/
