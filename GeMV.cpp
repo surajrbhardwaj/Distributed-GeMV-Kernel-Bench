@@ -2,8 +2,12 @@
 #include <iostream>
 #include <fstream>
 #include <stdfloat>
+#include <algorithm>
 #include <cstdint>
 #include <thread>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t N, const std::float16_t* __restrict__ matrix, const std::float16_t* __restrict__ vector, std::float16_t* __restrict__  results) {
     std::float32_t sum;
@@ -29,14 +33,24 @@ void threadLoop(ThreadData* data) {
     }
 }
 
-void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t*& mat, std::float16_t*& vec, std::float16_t*& result) {
+void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result) {
     std::ifstream vectorFile("vector.vec", std::ios::binary);
-    {
-        uint32_t vectorN;
-        vectorFile.read(reinterpret_cast<char*>(&vectorN), sizeof(uint32_t));
-        if(N!=vectorN) {std::cerr << "vector and matrix dimensions are not compatible" << std::endl; exit(-1);}
-        vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*N);
+    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*N);
+
+    const size_t dataSize = sizeof(std::float16_t) * M * N;
+    for(int i=1; i<=20; i++) {
+        int fd = open(("matrix" + std::to_string(i) + ".mat").c_str(), O_RDONLY);
+        if (fd == -1) {std::cout << "error opening one of the input files" << std::endl; exit(-1);}
+        void* mapped = mmap(nullptr, dataSize, PROT_READ, MAP_SHARED, fd, 0);
+        if (mapped == MAP_FAILED) {
+            perror("mmap failed");
+            exit(-1);
+        }
+        close(fd);
+        madvise(mapped, dataSize, MADV_SEQUENTIAL);
+        mats[i-1] = reinterpret_cast<std::float16_t*>(static_cast<char*>(mapped));
     }
+    madvise(mats[0], dataSize, MADV_WILLNEED);
 
     std::thread threads[numThreads];
     ThreadData threadParams[numThreads];
@@ -46,18 +60,14 @@ void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t*& mat
     }
     
     uint32_t workPerThread;
-    std::ifstream matrixFile;
 
     for(int i=1; i<=20; i++) {
-        // read in the matrix data
-        matrixFile = std::ifstream("matrix" + std::to_string(i) + ".mat", std::ios::binary);
-        matrixFile.seekg(8, std::ios::beg);
-        matrixFile.read(reinterpret_cast<char*>(mat), sizeof(std::float16_t)*M*N);
+        if(i!=20) {madvise(mats[i], dataSize, MADV_WILLNEED);}
 
         workPerThread = M/numThreads;
-        for(uint8_t i=0; i<numThreads; i++) {
-            threadParams[i] = {M, N, i==numThreads-1 ? M-i*workPerThread : workPerThread, i*workPerThread, mat, vec, result, ExecutionState::WORKING};
-            threadParams[i].flag.notify_one();
+        for(uint8_t j=0; j<numThreads; j++) {
+            threadParams[j] = {M, N, j==numThreads-1 ? M-j*workPerThread : workPerThread, j*workPerThread, mats[i-1], vec, result, ExecutionState::WORKING};
+            threadParams[j].flag.notify_one();
         }
 
         for(uint8_t i=0; i<numThreads; i++) {
@@ -66,9 +76,15 @@ void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t*& mat
             }
         }
 
+        madvise(mats[i-1], dataSize, MADV_DONTNEED);
+
         std::float16_t* temp = vec;
         vec = result;
         result = temp;
+    }
+    
+    for(int i=1; i<=20; i++) {
+        munmap(mats[i-1], dataSize);
     }
 
     for(uint8_t i=0; i<numThreads; i++) {
@@ -92,14 +108,20 @@ int main(int argc, char* argv[]) {
     uint8_t numThreads = std::min(std::thread::hardware_concurrency()==0 ? 1 : std::thread::hardware_concurrency(), M);
     numThreads = 6;
 
-    std::float16_t* mat = new std::float16_t[M*N];
+    std::float16_t** mats = new std::float16_t*[20];
     std::float16_t* vec = new std::float16_t[N];
 
     std::float16_t* result = new std::float16_t[M];
     
-    GeMV(numThreads, M, N, mat, vec, result);
+    GeMV(numThreads, M, N, mats, vec, result);
     
-    delete[] mat;
+    double verification = 0;
+    for(int i=0; i<N; i++) {
+        verification += result[i];
+    }
+    std::cout << verification << std::endl;
+    
+    delete[] mats;
     delete[] vec;
     delete[] result;
 }
