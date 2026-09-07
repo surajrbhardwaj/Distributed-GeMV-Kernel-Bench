@@ -1,0 +1,1 @@
+// essentially each compute node will hold an expert. we will randomly route between experts following several probability distributions (uniform distribution and some sort of skewed distribution (normal or chi square, idk))

@@ -62,4 +62,4 @@ void threadLoop(ThreadData* data);
 /// @param mat a pointer to a flattened array representation of the matrix with dimensions MxN
 /// @param vec a pointer to the flattened array reprentation of the vector with dimensions Nx1
 /// @param result a pointer to the flattened array representation of the result vector with dimensions Mx1
-void GeMV(uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t* mat, std::float16_t* vec, std::float16_t* result);
+void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t*& mat, std::float16_t*& vec, std::float16_t*& result);

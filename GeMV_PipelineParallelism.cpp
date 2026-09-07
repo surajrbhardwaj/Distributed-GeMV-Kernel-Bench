@@ -1,0 +1,1 @@
+// each node will have some llm layers and they will pass the work on to the next person following an assembly line type of pattern
