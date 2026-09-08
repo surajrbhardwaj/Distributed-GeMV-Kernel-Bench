@@ -50,7 +50,9 @@ void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t**& ma
         madvise(mapped, dataSize, MADV_SEQUENTIAL);
         mats[i-1] = reinterpret_cast<std::float16_t*>(static_cast<char*>(mapped));
     }
-    madvise(mats[0], dataSize, MADV_WILLNEED);
+    for(int i=0; i<5; i++) {
+        madvise(mats[i], dataSize, MADV_WILLNEED);
+    }
 
     std::thread threads[numThreads];
     ThreadData threadParams[numThreads];
@@ -62,7 +64,12 @@ void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t**& ma
     uint32_t workPerThread;
 
     for(int i=1; i<=20; i++) {
-        if(i!=20) {madvise(mats[i], dataSize, MADV_WILLNEED);}
+        if(i%5==0) {
+            for(int j=0; j<5; j++) {
+                madvise(mats[i+j], dataSize, MADV_WILLNEED);
+                madvise(mats[i-j-1], dataSize, MADV_DONTNEED);
+            }
+        }
 
         workPerThread = M/numThreads;
         for(uint8_t j=0; j<numThreads; j++) {
@@ -76,8 +83,7 @@ void GeMV(const uint8_t numThreads, uint32_t M, uint32_t N, std::float16_t**& ma
             }
         }
 
-        madvise(mats[i-1], dataSize, MADV_DONTNEED);
-
+        
         std::float16_t* temp = vec;
         vec = result;
         result = temp;
