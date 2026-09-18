@@ -42,9 +42,11 @@ if __name__ == "__main__":
     if matrixOrVector == 'matrix':
         M = args.M
         N = args.N
+
+        limit = np.sqrt(3.0 / N)
         with open(args.fileName, "wb") as f:
             for _ in range(M):
-                row = np.random.uniform(-1.0, 1.0, size=N).astype(np.float16)
+                row = np.random.uniform(-1*limit, limit, size=N).astype(np.float16)
                 row.tofile(f)
 
     elif matrixOrVector == "vector":
