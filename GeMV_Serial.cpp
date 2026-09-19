@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <string>
+
 int main(int argc, char* argv[]) {
     if(argc<3) {std::cerr << "not enough arguments (must provide matrix dimensions (num rows, num cols))" << std::endl; exit(-1);}
 

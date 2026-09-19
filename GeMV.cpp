@@ -177,7 +177,7 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
         }
 
         // gather the results on each node
-        MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_UINT16_T, MPI_COMM_WORLD);
+        MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_FLOAT16, MPI_COMM_WORLD);
 
         std::float16_t* temp = vec;
         vec = result;
@@ -228,7 +228,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
         vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
     }
     else {
-        // TODO: mpi recv the vector file from process with rank= rank-1
+        MPI_Recv(vec, xDim, MPI_FLOAT16, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     std::thread threads[numThreads];
@@ -266,7 +266,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
     }
 
     if(rank+1<workPerProcess.size()) {
-        // TODO: mpi send fully calculated vector result to process rank+1
+        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT16, rank+1, 0, MPI_COMM_WORLD);
     }
 
 

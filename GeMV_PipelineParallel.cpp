@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     GeMV_PipelineParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
 
     if(rank==0) {
-        // TODO: mpi recv the final calculated vector from rank numProcesses-1
+        MPI_Recv(vec, xDim, MPI_FLOAT16, numProcesses-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         std::ofstream out("output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             std::cerr << "Failed to open output.vec for writing.\n";
@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
         }
     }
     else if(rank==numProcesses-1) {
-        // TODO: mpi send the final calculated vector to rank 0
+        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT16, 0, 0, MPI_COMM_WORLD);
     }
 
     MPI_Finalize();

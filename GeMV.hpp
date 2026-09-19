@@ -5,6 +5,10 @@
 
 #pragma once
 
+#ifndef MPI_FLOAT16
+#define MPI_FLOAT16 MPI_UINT16_T
+#endif
+
 /// @brief represents the current state of our executor threads. working means that it has a task to do, finished means it is done with the task and terminating means that we want to shutdown the program
 enum class ExecutionState: uint8_t {
     WORKING,
