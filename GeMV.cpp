@@ -9,7 +9,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#define NUM_MATRICES 20
+// TODO: dynamically calculate the number of matrices to preload based on how much ram we have in the system
+// TODO: rewrite the logic to preload matrices into memory (after we finish with a matrix, remove it from ram and start preloading the next one that isn't in ram yet)
 
 std::ostream& operator<<(std::ostream& os, const ThreadData& td) {
     os << "ThreadData {\n"
@@ -79,8 +80,8 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
     uint32_t workPerThread;
 
     for(int i=1; i<=NUM_MATRICES; i++) {
-        if(i%5==0 && i!=NUM_MATRICES) {
-            for(int j=0; j<5; j++) {
+        if(i%5==0) {
+            for(int j=0; j<5 && i+j<NUM_MATRICES; j++) {
                 madvise(mats[i+j], dataSize, MADV_WILLNEED);
                 madvise(mats[i-j-1], dataSize, MADV_DONTNEED);
             }
@@ -156,8 +157,8 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
     uint32_t workPerThread;
 
     for(int i=1; i<=NUM_MATRICES; i++) {
-        if(i%5==0 && i!=NUM_MATRICES) {
-            for(int j=0; j<5; j++) {
+        if(i%5==0) {
+            for(int j=0; j<5 && i+j<NUM_MATRICES; j++) {
                 madvise(originalMatrixPointers[i+j], dataSize, MADV_WILLNEED);
                 madvise(originalMatrixPointers[i-j-1], dataSize, MADV_DONTNEED);
             }
@@ -240,7 +241,15 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
 
     uint32_t workPerThread;
 
-    for(int i=offsets[rank]; i<offsets[rank] + workPerProcess[rank]; i++) {
+    int lastMatrixNumber = offsets[rank]+workPerProcess[rank];
+    for(int i=offsets[rank]; i<lastMatrixNumber; i++) {
+        if((i-offsets[rank]+1)%5==0) {
+            for(int j=0; j<5 && i+j<lastMatrixNumber; j++) {
+                madvise(mats[i+j], dataSize, MADV_WILLNEED);
+                madvise(mats[i-j-1], dataSize, MADV_DONTNEED);
+            }
+        }
+
         workPerThread = yDim/numThreads;
         if(workPerThread==0) {workPerThread=1;}
         for(uint8_t j=0; j<numThreads; j++) {

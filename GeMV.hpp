@@ -1,9 +1,13 @@
+#include <mpi.h>
+#include <vector>
 #include <stdfloat>
 #include <cstdint>
 #include <atomic>
 #include <ostream>
 
 #pragma once
+
+#define NUM_MATRICES 20
 
 #ifndef MPI_FLOAT16
 #define MPI_FLOAT16 MPI_UINT16_T
