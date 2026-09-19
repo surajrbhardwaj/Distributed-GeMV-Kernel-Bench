@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 
     std::vector<int> workPerProcess(numProcesses);
     std::vector<int> offsets(numProcesses);
-    offsets[0] = 1;
+    offsets[0] = 0;
     {
         int temp = NUM_MATRICES/numProcesses;
         workPerProcess[0] = temp;
@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::float16_t** mats = new std::float16_t*[NUM_MATRICES];
+    std::float16_t** mats = new std::float16_t*[workPerProcess[rank]];
     std::float16_t* vec = new std::float16_t[xDim];
 
     std::float16_t* result = new std::float16_t[yDim];
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     GeMV_PipelineParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
 
     if(rank==0) {
-        MPI_Recv(vec, xDim, MPI_FLOAT16, numProcesses-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(result, xDim, MPI_FLOAT16, numProcesses-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         std::ofstream out("output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             std::cerr << "Failed to open output.vec for writing.\n";

@@ -94,9 +94,9 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
             threadParams[j].flag.notify_one();
         }
 
-        for(uint8_t i=0; i<numThreads; i++) {
-            while(threadParams[i].flag.load() == ExecutionState::WORKING) {
-                threadParams[i].flag.wait(ExecutionState::WORKING);
+        for(uint8_t j=0; j<numThreads; j++) {
+            while(threadParams[j].flag.load() == ExecutionState::WORKING) {
+                threadParams[j].flag.wait(ExecutionState::WORKING);
             }
         }
 
@@ -156,24 +156,24 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
 
     uint32_t workPerThread;
 
-    for(int i=1; i<=NUM_MATRICES; i++) {
-        if(i%5==0) {
-            for(int j=0; j<5 && i+j<NUM_MATRICES; j++) {
-                madvise(originalMatrixPointers[i+j], dataSize, MADV_WILLNEED);
-                madvise(originalMatrixPointers[i-j-1], dataSize, MADV_DONTNEED);
-            }
-        }
-
+    for(int i=0; i<NUM_MATRICES; i++) {
         workPerThread = workPerProcess[rank]/numThreads;
         if(workPerThread==0) {workPerThread=1;}
         for(uint8_t j=0; j<numThreads; j++) {
-            threadParams[j] = {xDim, yDim, (workPerThread*numThreads>workPerProcess[rank] ? (j*workPerThread < workPerProcess[rank] ? workPerThread : 0) : (j==numThreads-1 ? workPerProcess[rank]-j*workPerThread : workPerThread)), j*workPerThread, mats[i-1], vec, result+offsets[rank], ExecutionState::WORKING};
+            threadParams[j] = {xDim, yDim, (workPerThread*numThreads>workPerProcess[rank] ? (j*workPerThread < workPerProcess[rank] ? workPerThread : 0) : (j==numThreads-1 ? workPerProcess[rank]-j*workPerThread : workPerThread)), j*workPerThread, mats[i], vec, result+offsets[rank], ExecutionState::WORKING};
             threadParams[j].flag.notify_one();
         }
 
-        for(uint8_t i=0; i<numThreads; i++) {
-            while(threadParams[i].flag.load() == ExecutionState::WORKING) {
-                threadParams[i].flag.wait(ExecutionState::WORKING);
+        for(uint8_t j=0; j<numThreads; j++) {
+            while(threadParams[j].flag.load() == ExecutionState::WORKING) {
+                threadParams[j].flag.wait(ExecutionState::WORKING);
+            }
+        }
+
+        if(i+1%5==0) {
+            for(int j=0; j<5 && i+j<NUM_MATRICES; j++) {
+                madvise(originalMatrixPointers[i+j+1], dataSize, MADV_WILLNEED);
+                madvise(originalMatrixPointers[i-j], dataSize, MADV_DONTNEED);
             }
         }
 
@@ -207,20 +207,20 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
 void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
     // TODO: be sure to pre populate the memory with the matrices
     const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
-    std::vector<void*> originalMatrixPointers(NUM_MATRICES, nullptr);
-    for(int i=1; i<=NUM_MATRICES; i++) {
-        int fd = open(("inputs/matrix" + std::to_string(i) + ".mat").c_str(), O_RDONLY);
+    std::vector<void*> originalMatrixPointers(workPerProcess[rank], nullptr);
+    for(int i=0; i<workPerProcess[rank]; i++) {
+        int fd = open(("inputs/matrix" + std::to_string(i+offsets[rank]+1) + ".mat").c_str(), O_RDONLY);
         if (fd == -1) {std::cout << "error opening one of the input files" << std::endl; exit(-1);}
-        originalMatrixPointers[i-1] = mmap(nullptr, dataSize, PROT_READ, MAP_SHARED, fd, 0);
-        if (originalMatrixPointers[i-1] == MAP_FAILED) {
+        originalMatrixPointers[i] = mmap(nullptr, dataSize, PROT_READ, MAP_SHARED, fd, 0);
+        if (originalMatrixPointers[i] == MAP_FAILED) {
             perror("mmap failed");
             exit(-1);
         }
         close(fd);
-        madvise(originalMatrixPointers[i-1], dataSize, MADV_SEQUENTIAL);
-        mats[i-1] = reinterpret_cast<std::float16_t*>(static_cast<char*>(originalMatrixPointers[i-1]) + offsets[rank]*xDim*sizeof(std::float16_t));
+        madvise(originalMatrixPointers[i], dataSize, MADV_SEQUENTIAL);
+        mats[i] = reinterpret_cast<std::float16_t*>(originalMatrixPointers[i]);
     }
-    for(int i=0; i<5; i++) {
+    for(int i=0; i<std::min(workPerProcess[rank], 5); i++) {
         madvise(originalMatrixPointers[i], dataSize, MADV_WILLNEED);
     }
 
@@ -229,7 +229,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
         vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
     }
     else {
-        MPI_Recv(vec, xDim, MPI_FLOAT16, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(vec, yDim, MPI_FLOAT16, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     std::thread threads[numThreads];
@@ -241,37 +241,32 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
 
     uint32_t workPerThread;
 
-    int lastMatrixNumber = offsets[rank]+workPerProcess[rank];
-    for(int i=offsets[rank]; i<lastMatrixNumber; i++) {
-        if((i-offsets[rank]+1)%5==0) {
-            for(int j=0; j<5 && i+j<lastMatrixNumber; j++) {
-                madvise(mats[i+j], dataSize, MADV_WILLNEED);
-                madvise(mats[i-j-1], dataSize, MADV_DONTNEED);
-            }
-        }
-
+    for(int i=0; i<workPerProcess[rank]; i++) {
         workPerThread = yDim/numThreads;
         if(workPerThread==0) {workPerThread=1;}
         for(uint8_t j=0; j<numThreads; j++) {
-            threadParams[j] = {xDim, yDim, (workPerThread*numThreads>yDim ? (j*workPerThread < yDim ? workPerThread : 0) : (j==numThreads-1 ? yDim-j*workPerThread : workPerThread)), j*workPerThread, mats[i-1], vec, result, ExecutionState::WORKING};
+            threadParams[j] = {xDim, yDim, (workPerThread*numThreads>yDim ? (j*workPerThread < yDim ? workPerThread : 0) : (j==numThreads-1 ? yDim-j*workPerThread : workPerThread)), j*workPerThread, mats[i], vec, result, ExecutionState::WORKING};
             threadParams[j].flag.notify_one();
         }
 
-        for(uint8_t i=0; i<numThreads; i++) {
-            while(threadParams[i].flag.load() == ExecutionState::WORKING) {
-                threadParams[i].flag.wait(ExecutionState::WORKING);
+        for(uint8_t j=0; j<numThreads; j++) {
+            while(threadParams[j].flag.load() == ExecutionState::WORKING) {
+                threadParams[j].flag.wait(ExecutionState::WORKING);
             }
         }
 
-        std::float16_t* temp = vec;
-        vec = result;
-        result = temp;
-    }
+        if((i+1)%5==0) {
+            for(int j=0; j<5 && i+j+1<workPerProcess[rank]; j++) {
+                madvise(originalMatrixPointers[i+j+1], dataSize, MADV_WILLNEED);
+                madvise(originalMatrixPointers[i-j], dataSize, MADV_DONTNEED);
+            }
+        }
 
-    if(NUM_MATRICES%2==0) {
-        std::float16_t* temp = vec;
-        vec = result;
-        result = temp;
+        if(i+1!=workPerProcess[rank]) {
+            std::float16_t* temp = vec;
+            vec = result;
+            result = temp;
+        }
     }
 
     if(rank+1<workPerProcess.size()) {
@@ -279,8 +274,8 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
     }
 
 
-    for(int i=1; i<=NUM_MATRICES; i++) {
-        munmap(originalMatrixPointers[i-1], dataSize);
+    for(int i=0; i<workPerProcess[rank]; i++) {
+        munmap(originalMatrixPointers[i], dataSize);
     }
 
     for(uint8_t i=0; i<numThreads; i++) {
