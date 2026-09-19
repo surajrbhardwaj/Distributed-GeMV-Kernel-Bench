@@ -13,12 +13,7 @@
 #define NUM_MATRICES 20
 
 void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
-    // TODO: load in the vector file if we are rank 1
-    std::ifstream vectorFile("inputs/vector.vec", std::ios::binary);
-    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
-    // TODO: else we should block until we get the vector file from the previous process
-
-    // TODO: load in the appropriate matrices before blocking on the vector file. be sure to pre populate the memory with the matrices
+    // TODO: be sure to pre populate the memory with the matrices
     const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
     std::vector<void*> originalMatrixPointers(NUM_MATRICES, nullptr);
     for(int i=1; i<=NUM_MATRICES; i++) {
@@ -37,6 +32,14 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
         madvise(originalMatrixPointers[i], dataSize, MADV_WILLNEED);
     }
 
+    if(rank==0) {
+        std::ifstream vectorFile("inputs/vector.vec", std::ios::binary);
+        vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
+    }
+    else {
+        // TODO: mpi recv the vector file from process with rank= rank-1
+    }
+
     std::thread threads[numThreads];
     ThreadData threadParams[numThreads];
     for(uint8_t i=0; i<numThreads; i++) {
@@ -46,20 +49,11 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
 
     uint32_t workPerThread;
 
-    // TODO: only iterate over our share of the total number of matrices (workPerProcess[rank])
-    for(int i=1; i<=NUM_MATRICES; i++) {
-        if(i%5==0 && i!=NUM_MATRICES) {
-            for(int j=0; j<5; j++) {
-                madvise(originalMatrixPointers[i+j], dataSize, MADV_WILLNEED);
-                madvise(originalMatrixPointers[i-j-1], dataSize, MADV_DONTNEED);
-            }
-        }
-
-        // TODO: we can pass the entire matrix to the threads (copy from the serial GeMV)
-        workPerThread = workPerProcess[rank]/numThreads;
+    for(int i=offsets[rank]; i<offsets[rank] + workPerProcess[rank]; i++) {
+        workPerThread = yDim/numThreads;
         if(workPerThread==0) {workPerThread=1;}
         for(uint8_t j=0; j<numThreads; j++) {
-            threadParams[j] = {xDim, yDim, (workPerThread*numThreads>workPerProcess[rank] ? (j*workPerThread < workPerProcess[rank] ? workPerThread : 0) : (j==numThreads-1 ? workPerProcess[rank]-j*workPerThread : workPerThread)), j*workPerThread, mats[i-1], vec, result+offsets[rank], ExecutionState::WORKING};
+            threadParams[j] = {xDim, yDim, (workPerThread*numThreads>yDim ? (j*workPerThread < yDim ? workPerThread : 0) : (j==numThreads-1 ? yDim-j*workPerThread : workPerThread)), j*workPerThread, mats[i-1], vec, result, ExecutionState::WORKING};
             threadParams[j].flag.notify_one();
         }
 
@@ -69,16 +63,22 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
             }
         }
 
-        // TODO: remove this unnecessary synchronization
-        // gather the results on each node
-        MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_UINT16_T, MPI_COMM_WORLD);
-
         std::float16_t* temp = vec;
         vec = result;
         result = temp;
     }
 
-    // TODO: start sending the fully calculated vector to the next process
+    if(NUM_MATRICES%2==0) {
+        std::float16_t* temp = vec;
+        vec = result;
+        result = temp;
+    }
+
+    if(rank+1<workPerProcess.size()) {
+        // TODO: mpi send fully calculated vector result to process rank+1
+    }
+
+
     for(int i=1; i<=NUM_MATRICES; i++) {
         munmap(originalMatrixPointers[i-1], dataSize);
     }
@@ -89,12 +89,6 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
     }
     for(uint8_t i=0; i<numThreads; i++) {
         threads[i].join();
-    }
-
-    if(NUM_MATRICES%2==0) {
-        std::float16_t* temp = vec;
-        vec = result;
-        result = temp;
     }
 }
 
@@ -115,13 +109,13 @@ int main(int argc, char** argv) {
 
     std::vector<int> workPerProcess(numProcesses);
     std::vector<int> offsets(numProcesses);
-    offsets[0] = 0;
+    offsets[0] = 1;
     {
-        int temp = yDim/numProcesses;
+        int temp = NUM_MATRICES/numProcesses;
         workPerProcess[0] = temp;
         for(int i=1; i<numProcesses; i++) {
             offsets[i] = offsets[i-1]+workPerProcess[i-1];
-            if(i==numProcesses-1) {workPerProcess[i] = yDim-offsets[i];}
+            if(i==numProcesses-1) {workPerProcess[i] = NUM_MATRICES-offsets[i];}
             else {workPerProcess[i] = temp;}
         }
     }
@@ -133,11 +127,8 @@ int main(int argc, char** argv) {
 
     GeMV_PipelineParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
 
-    // TODO: move this to after the if statement
-    MPI_Finalize();
-
-    // TODO: if we are rank 0 we should receive the final fully calculated vector, if we are the final process, we should send the final fully calculated vector
     if(rank==0) {
+        // TODO: mpi recv the final calculated vector from rank numProcesses-1
         std::ofstream out("output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             std::cerr << "Failed to open output.vec for writing.\n";
@@ -149,6 +140,11 @@ int main(int argc, char** argv) {
             std::cerr << "Error occurred while writing to output.vec.\n";
         }
     }
+    else if(rank==numProcesses-1) {
+        // TODO: mpi send the final calculated vector to rank 0
+    }
+
+    MPI_Finalize();
 
     delete[] mats;
     delete[] vec;
