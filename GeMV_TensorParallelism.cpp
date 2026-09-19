@@ -126,11 +126,6 @@ int main(int argc, char** argv) {
 
     GeMV_TensorParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
 
-    // gather the results on each node
-    // MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_UINT16_T, MPI_COMM_WORLD);
-
-    MPI_Finalize();
-
     if(rank==0) {
         std::ofstream out("output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
@@ -143,6 +138,8 @@ int main(int argc, char** argv) {
             std::cerr << "Error occurred while writing to output.vec.\n";
         }
     }
+
+    MPI_Finalize();
 
     delete[] mats;
     delete[] vec;
