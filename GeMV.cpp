@@ -131,8 +131,8 @@ void GeMV(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, st
 int main(int argc, char* argv[]) {
     if(argc<3) {std::cerr << "not enough arguments (must provide matrix dimensions (num rows, num cols))" << std::endl; exit(-1);}
 
-    uint32_t xDim=std::stoul(argv[1]); // num matrix rows
-    uint32_t yDim=std::stoul(argv[2]); // num matrix cols
+    uint32_t xDim=std::stoul(argv[1]); // num matrix cols
+    uint32_t yDim=std::stoul(argv[2]); // num matrix rows
 
     uint8_t numThreads = std::min(std::thread::hardware_concurrency()==0 ? 1 : std::thread::hardware_concurrency(), yDim);
 

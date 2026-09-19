@@ -42,6 +42,7 @@ struct ThreadData {
     }
 };
 
+/// @brief Debug helper function to print out ThreadData struct
 std::ostream& operator<<(std::ostream& os, const ThreadData& td);
 
 /// @brief the kernel function that runs on each thread to do some amount of the matrix multiplication task
