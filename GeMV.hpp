@@ -66,4 +66,28 @@ void threadLoop(ThreadData* data);
 /// @param mat a pointer to a flattened array representation of the matrix with dimensions yDim x xDim
 /// @param vec a pointer to the flattened array reprentation of the vector with dimensions xDim x 1
 /// @param result a pointer to the flattened array representation of the result vector with dimensions yDim x 1
-void GeMV(const uint8_t numThreads, uint32_t xDim, uint32_t yDim, std::float16_t**& mat, std::float16_t*& vec, std::float16_t*& result);
+void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result);
+
+/// @brief runs GeMV across multiple threads on multiple nodes following a Tensor Parallel distribution approach
+/// @param numThreads the number of threads to use
+/// @param xDim the height of the vector to multiply with the matrix
+/// @param yDim the height of the matrix to multiply with the vector
+/// @param mat a pointer to a flattened array representation of the matrix with dimensions yDim x xDim
+/// @param vec a pointer to the flattened array reprentation of the vector with dimensions xDim x 1
+/// @param result a pointer to the flattened array representation of the result vector with dimensions yDim x 1
+/// @param rank a sequential process id (zero indexed)
+/// @param workPerProcess a vector of size numProcesses where each entry denotes the number of rows that process is to compute dot products for
+/// @param offsets a vector of size numProcesses where each entry denotes the starting row number (inclusive) of that process to compute dot products from
+void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets);
+
+/// @brief runs GeMV across multiple threads on multiple nodes following a Pipeline Parallel distribution approach
+/// @param numThreads the number of threads to use
+/// @param xDim the height of the vector to multiply with the matrix
+/// @param yDim the height of the matrix to multiply with the vector
+/// @param mat a pointer to a flattened array representation of the matrix with dimensions yDim x xDim
+/// @param vec a pointer to the flattened array reprentation of the vector with dimensions xDim x 1
+/// @param result a pointer to the flattened array representation of the result vector with dimensions yDim x 1
+/// @param rank a sequential process id (zero indexed)
+/// @param workPerProcess a vector of size numProcesses where each entry denotes the number of rows that process is to compute dot products for
+/// @param offsets a vector of size numProcesses where each entry denotes the starting row number (inclusive) of that process to compute dot products from
+void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets);
