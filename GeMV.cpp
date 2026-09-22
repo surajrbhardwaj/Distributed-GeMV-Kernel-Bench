@@ -30,6 +30,10 @@ std::ostream& operator<<(std::ostream& os, const ThreadData& td) {
     return os;
 }
 
+double timeval_to_sec(const struct timeval& tv) {
+    return static_cast<double>(tv.tv_sec) + (static_cast<double>(tv.tv_usec) * 1e-6);
+}
+
 void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t xDim, const std::float16_t* __restrict__ matrix, const std::float16_t* __restrict__ vector, std::float16_t* __restrict__  results) {
     std::float32_t sum;
     uint32_t localOffset = offset * xDim;
@@ -157,6 +161,9 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
 
     uint32_t workPerThread;
 
+    double T_mpiOverhead=0;
+    double T_mpiStart;
+    double T_mpiEnd;
     for(int i=0; i<NUM_MATRICES; i++) {
         workPerThread = workPerProcess[rank]/numThreads;
         if(workPerThread==0) {workPerThread=1;}
@@ -170,6 +177,7 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
                 threadParams[j].flag.wait(ExecutionState::WORKING);
             }
         }
+        T_mpiStart = MPI_Wtime();
 
         if(i+5<NUM_MATRICES) {
             madvise(originalMatrixPointers[i+5], dataSize, MADV_WILLNEED);
@@ -178,6 +186,8 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
 
         // gather the results on each node
         MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_FLOAT16, MPI_COMM_WORLD);
+        T_mpiEnd = MPI_Wtime();
+        T_mpiOverhead += (T_mpiEnd - T_mpiStart);
 
         std::float16_t* temp = vec;
         vec = result;
@@ -201,6 +211,7 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
         vec = result;
         result = temp;
     }
+    std::cout << "MPI Overhead (seconds): " << T_mpiOverhead << std::endl;
 }
 
 void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
@@ -258,7 +269,11 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
     }
 
     if(rank+1<workPerProcess.size()) {
+        double T_mpiStart = MPI_Wtime();
         MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT16, rank+1, 0, MPI_COMM_WORLD);
+        double T_mpiEnd = MPI_Wtime();
+
+        std::cout << "MPI Overhead (seconds): " << (T_mpiEnd-T_mpiStart) << std::endl;
     }
 
 

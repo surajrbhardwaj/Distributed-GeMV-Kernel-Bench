@@ -53,6 +53,9 @@ struct ThreadData {
 /// @brief Debug helper function to print out ThreadData struct
 std::ostream& operator<<(std::ostream& os, const ThreadData& td);
 
+/// @brief Reporting helper function to convert from struct timeval to seconds
+double timeval_to_sec(const struct timeval& tv);
+
 /// @brief the kernel function that runs on each thread to do some amount of the matrix multiplication task
 /// @param work the number of dot products to be calculated
 /// @param offset the number row index after which we must calculate the dot products

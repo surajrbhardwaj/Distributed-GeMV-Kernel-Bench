@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <cstring>
 #include <string>
+#include <sys/resource.h>
+#include <chrono>
 
 int main(int argc, char* argv[]) {
     if(argc<3) {std::cerr << "not enough arguments (must provide matrix dimensions (num rows, num cols))" << std::endl; exit(-1);}
@@ -24,7 +26,10 @@ int main(int argc, char* argv[]) {
 
     std::float16_t* result = new std::float16_t[yDim];
 
+    auto wall_start = std::chrono::steady_clock::now();
     GeMV_Serial(numThreads, xDim, yDim, mats, vec, result);
+    auto wall_end = std::chrono::steady_clock::now();
+    double T_wall = std::chrono::duration<double>(wall_end - wall_start).count();
 
     std::ofstream out("output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
     if (!out.is_open()) {
@@ -36,6 +41,25 @@ int main(int argc, char* argv[]) {
     if(!out) {
         std::cerr << "Error occurred while writing to output.vec.\n";
     }
+
+    struct rusage resourceUsage;
+    if(getrusage(RUSAGE_SELF, &resourceUsage)) {
+        std::cerr << "Error occurred while getting maximum RAM usage statistic\n";
+    }
+    std::cout << "Maximum RAM Usage (bytes): " << resourceUsage.ru_maxrss*1000 << std::endl;
+    double T_user = timeval_to_sec(resourceUsage.ru_utime);
+    double T_sys  = timeval_to_sec(resourceUsage.ru_stime);
+    double T_active = T_user + T_sys;
+
+    std::cout << "Wall Clock Time (seconds): " << T_wall << std::endl;
+    std::cout << "User Time (seconds): " << T_user << std::endl;
+    std::cout << "System Time (seconds): " << T_sys << std::endl;
+
+    double avg_idle_time = T_wall - (T_active / static_cast<int>(numThreads));
+    std::cout << "Idle Time (seconds): " << avg_idle_time << std::endl;
+
+    double bandwidth = (xDim*yDim*sizeof(std::float16_t)*NUM_MATRICES)/(T_wall*1e9);
+    std::cout << "Achieved Memory Bandwidth (GB/s): " << bandwidth << std::endl;
 
     delete[] mats;
     delete[] vec;
