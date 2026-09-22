@@ -10,8 +10,6 @@
 #include <iostream>
 #include <string>
 
-// TODO: remove all the unnecessary headers from here and move them to the GeMV.cpp file (do the same for the tensor parallel file)
-
 int main(int argc, char** argv) {
     int numProcesses;
     int rank;
