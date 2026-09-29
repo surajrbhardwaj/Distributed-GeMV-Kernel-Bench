@@ -17,6 +17,21 @@
 // TODO: dynamically calculate the number of matrices to preload based on how much ram we have in the system
 // TODO: add in a debug build so that i can run thread, address, and UB sanitizers as well as debug and warning flags when compiling
 
+/*
+void trace_begin(const char* name) {
+    if (trace_fd >= 0) {
+        // "B|<pid>|<name>" is the standard Linux/Perfetto timeline span format
+        dprintf(trace_fd, "B|%d|%s\n", getpid(), name);
+    }
+}
+
+void trace_end() {
+    if (trace_fd >= 0) {
+        dprintf(trace_fd, "E\n");
+    }
+}
+*/
+
 std::ostream& operator<<(std::ostream& os, const ThreadData& td) {
     os << "ThreadData {\n"
        << "  xDim     " << td.xDim << ",\n"
@@ -59,12 +74,12 @@ void threadLoop(ThreadData* data) {
 }
 
 void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result) {
-    std::ifstream vectorFile("inputs/vector.vec", std::ios::binary);
+    std::ifstream vectorFile("in/vector.vec", std::ios::binary);
     vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*yDim);
 
     const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
     for(int i=0; i<NUM_MATRICES; i++) {
-        int fd = open(("inputs/matrix" + std::to_string(i+1) + ".mat").c_str(), O_RDONLY);
+        int fd = open(("./in/matrix" + std::to_string(i+1) + ".mat").c_str(), O_RDONLY);
         if (fd == -1) {std::cout << "error opening one of the input files" << std::endl; exit(-1);}
         void* mapped = mmap(nullptr, dataSize, PROT_READ, MAP_SHARED, fd, 0);
         if (mapped == MAP_FAILED) {
@@ -133,13 +148,13 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
 
 // TODO: should actually only be calling madvise on the sections that we are actually going to access (not on the whole matrix)
 void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
-    std::ifstream vectorFile("inputs/vector.vec", std::ios::binary);
+    std::ifstream vectorFile("in/vector.vec", std::ios::binary);
     vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
 
     const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
     std::vector<void*> originalMatrixPointers(NUM_MATRICES, nullptr);
     for(int i=0; i<NUM_MATRICES; i++) {
-        int fd = open(("inputs/matrix" + std::to_string(i+1) + ".mat").c_str(), O_RDONLY);
+        int fd = open(("./in/matrix" + std::to_string(i+1) + ".mat").c_str(), O_RDONLY);
         if (fd == -1) {std::cout << "error opening one of the input files" << std::endl; exit(-1);}
         originalMatrixPointers[i] = mmap(nullptr, dataSize, PROT_READ, MAP_SHARED, fd, 0);
         if (originalMatrixPointers[i] == MAP_FAILED) {
@@ -218,7 +233,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
     const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
     std::vector<void*> originalMatrixPointers(workPerProcess[rank], nullptr);
     for(int i=0; i<workPerProcess[rank]; i++) {
-        int fd = open(("inputs/matrix" + std::to_string(i+offsets[rank]+1) + ".mat").c_str(), O_RDONLY);
+        int fd = open(("./in/matrix" + std::to_string(i+offsets[rank]+1) + ".mat").c_str(), O_RDONLY);
         if (fd == -1) {std::cout << "error opening one of the input files" << std::endl; exit(-1);}
         originalMatrixPointers[i] = mmap(nullptr, dataSize, PROT_READ, MAP_SHARED | MAP_POPULATE, fd, 0);
         if (originalMatrixPointers[i] == MAP_FAILED) {
@@ -231,7 +246,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
     }
 
     if(rank==0) {
-        std::ifstream vectorFile("inputs/vector.vec", std::ios::binary);
+        std::ifstream vectorFile("in/vector.vec", std::ios::binary);
         vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
     }
     else {

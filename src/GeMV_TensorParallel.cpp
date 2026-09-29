@@ -31,28 +31,27 @@ int main(int argc, char** argv) {
     std::vector<int> offsets(numProcesses);
     offsets[0] = 0;
     {
-        int temp = NUM_MATRICES/numProcesses;
+        int temp = yDim/numProcesses;
         workPerProcess[0] = temp;
         for(int i=1; i<numProcesses; i++) {
             offsets[i] = offsets[i-1]+workPerProcess[i-1];
-            if(i==numProcesses-1) {workPerProcess[i] = NUM_MATRICES-offsets[i];}
+            if(i==numProcesses-1) {workPerProcess[i] = yDim-offsets[i];}
             else {workPerProcess[i] = temp;}
         }
     }
 
-    std::float16_t** mats = new std::float16_t*[workPerProcess[rank]];
+    std::float16_t** mats = new std::float16_t*[NUM_MATRICES];
     std::float16_t* vec = new std::float16_t[xDim];
 
     std::float16_t* result = new std::float16_t[yDim];
 
     auto wall_start = std::chrono::steady_clock::now();
-    GeMV_PipelineParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
+    GeMV_TensorParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
     auto wall_end = std::chrono::steady_clock::now();
     double T_wall = std::chrono::duration<double>(wall_end - wall_start).count();
 
     if(rank==0) {
-        MPI_Recv(result, xDim, MPI_FLOAT16, numProcesses-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        std::ofstream out("output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
+        std::ofstream out("./out/output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             std::cerr << "Failed to open output.vec for writing.\n";
             return -1;
@@ -62,13 +61,6 @@ int main(int argc, char** argv) {
         if(!out) {
             std::cerr << "Error occurred while writing to output.vec.\n";
         }
-    }
-    else if(rank==numProcesses-1) {
-        double T_mpiStart=MPI_Wtime();
-        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT16, 0, 0, MPI_COMM_WORLD);
-        double T_mpiEnd=MPI_Wtime();
-
-        std::cout << "MPI Overhead (seconds): " << (T_mpiEnd-T_mpiStart) << std::endl;
     }
 
     MPI_Finalize();

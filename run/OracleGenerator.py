@@ -32,5 +32,5 @@ for i in range(1, 21):
     vec = res_fp32.astype(np.float16)
 
 # 3. Save expected output vector
-vec.tofile("oracle.vec")
+vec.tofile("out/oracle.vec")
 print("Reference calculation complete. Saved to oracle.vec")

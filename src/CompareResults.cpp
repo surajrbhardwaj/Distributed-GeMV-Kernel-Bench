@@ -4,8 +4,8 @@
 #include <stdfloat>
 
 int main() {
-    std::ifstream f1("output.vec", std::ios::binary);
-    std::ifstream f2("oracle.vec", std::ios::binary);
+    std::ifstream f1("out/output.vec", std::ios::binary);
+    std::ifstream f2("out/oracle.vec", std::ios::binary);
 
     if (!f1 || !f2) {
         std::cerr << "Failed to open input files.\n";

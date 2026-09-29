@@ -13,6 +13,12 @@
 #define MPI_FLOAT16 MPI_UINT16_T
 #endif
 
+/// @brief This is meant to create a visual span in perfetto to represent compute times
+void trace_begin(const char* name);
+
+/// @brief This is meant to end a visual span in perfetto to represent compute times
+void trace_end();
+
 /// @brief represents the current state of our executor threads. working means that it has a task to do, finished means it is done with the task and terminating means that we want to shutdown the program
 enum class ExecutionState: uint8_t {
     WORKING,
