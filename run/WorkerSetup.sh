@@ -38,6 +38,8 @@ for i in {1..20}; do
   fi
 done
 
+mkdir -p out
+
 echo "=== [6/6] Building CMake target ==="
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
