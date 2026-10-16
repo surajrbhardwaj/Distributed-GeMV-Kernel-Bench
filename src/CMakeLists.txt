@@ -14,3 +14,4 @@ add_executable(GeMV_PipelineParallel GeMV_PipelineParallel.cpp)
 target_link_libraries(GeMV_PipelineParallel PRIVATE GeMV_Core)
 
 add_executable(CompareResults CompareResults.cpp)
+target_link_libraries(CompareResults PRIVATE GeMV_Core)

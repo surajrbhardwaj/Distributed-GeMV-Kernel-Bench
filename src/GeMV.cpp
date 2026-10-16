@@ -51,15 +51,15 @@ double timeval_to_sec(const struct timeval& tv) {
 
 void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t xDim, const std::float32_t* __restrict__ matrix, const std::float32_t* __restrict__ vector, std::float32_t* __restrict__  results) {
     std::float32_t sum;
-    uint32_t localOffset = offset * xDim;
     uint32_t endIndex = offset+work;
-    for(uint32_t w=offset; w<endIndex; w++) {
+    const std::float32_t* __restrict__ row;
+    for(size_t w=offset; w<endIndex; w++) {
+	row = matrix + xDim*w;
         sum = 0.0f;
-        for(uint32_t i=0; i<xDim; i++) {
-            sum += matrix[localOffset + i]*vector[i];
+        for(size_t i=0; i<xDim; i++) {
+            sum += row[i]*vector[i];
         }
         results[w] = sum;
-        localOffset += xDim;
     }
 }
 

@@ -11,8 +11,8 @@ add_compile_options(
     -O3
     -march=native
     -ffast-math
-    -flto
     -DNDEBUG
+    -fopt-info-vec-all
 )
 
 find_package(MPI REQUIRED)
