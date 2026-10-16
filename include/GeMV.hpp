@@ -9,10 +9,6 @@
 
 #define NUM_MATRICES 20
 
-#ifndef MPI_FLOAT16
-#define MPI_FLOAT16 MPI_UINT16_T
-#endif
-
 /// @brief This is meant to create a visual span in perfetto to represent compute times
 void trace_begin(const char* name);
 
@@ -32,13 +28,13 @@ struct ThreadData {
     uint32_t yDim;
     uint32_t work;
     uint32_t offset;
-    std::float16_t* matrixPtr{nullptr};
-    std::float16_t* vectorPtr{nullptr};
-    std::float16_t* resultPtr{nullptr};
+    std::float32_t* matrixPtr{nullptr};
+    std::float32_t* vectorPtr{nullptr};
+    std::float32_t* resultPtr{nullptr};
     std::atomic<ExecutionState> flag{ExecutionState::FINISHED};
 
     ThreadData() {}
-    ThreadData(uint32_t xDim, uint32_t yDim, uint32_t work, uint32_t offset, std::float16_t* matrixPtr, std::float16_t* vectorPtr, std::float16_t* resultPtr, ExecutionState flag): xDim(xDim), yDim(yDim), work(work), offset(offset), matrixPtr(matrixPtr), vectorPtr(vectorPtr), resultPtr(resultPtr) {
+    ThreadData(uint32_t xDim, uint32_t yDim, uint32_t work, uint32_t offset, std::float32_t* matrixPtr, std::float32_t* vectorPtr, std::float32_t* resultPtr, ExecutionState flag): xDim(xDim), yDim(yDim), work(work), offset(offset), matrixPtr(matrixPtr), vectorPtr(vectorPtr), resultPtr(resultPtr) {
         this->flag.store(flag);
     }
     ThreadData& operator=(ThreadData&& other) noexcept {
@@ -70,7 +66,7 @@ double timeval_to_sec(const struct timeval& tv);
 /// @param vector column vector represented as an array for cache coherence
 /// @param results the output column vector represented as an array for cache coherence
 /// @return void
-void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t xDim, const std::float16_t* matrix, const std::float16_t* vector, std::float16_t* results);
+void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t xDim, const std::float32_t* matrix, const std::float32_t* vector, std::float32_t* results);
 
 /// @brief follows a producer consumer pattern blocking until there is work to be done then calling the GeMV_kernel function to do the work
 /// @param data the parameters with which we want to run the GeMV_kernel
@@ -83,7 +79,7 @@ void threadLoop(ThreadData* data);
 /// @param mat a pointer to a flattened array representation of the matrix with dimensions yDim x xDim
 /// @param vec a pointer to the flattened array reprentation of the vector with dimensions xDim x 1
 /// @param result a pointer to the flattened array representation of the result vector with dimensions yDim x 1
-void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result);
+void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float32_t**& mats, std::float32_t*& vec, std::float32_t*& result);
 
 /// @brief runs GeMV across multiple threads on multiple nodes following a Tensor Parallel distribution approach
 /// @param numThreads the number of threads to use
@@ -95,7 +91,7 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
 /// @param rank a sequential process id (zero indexed)
 /// @param workPerProcess a vector of size numProcesses where each entry denotes the number of rows that process is to compute dot products for
 /// @param offsets a vector of size numProcesses where each entry denotes the starting row number (inclusive) of that process to compute dot products from
-void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets);
+void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float32_t**& mats, std::float32_t*& vec, std::float32_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets);
 
 /// @brief runs GeMV across multiple threads on multiple nodes following a Pipeline Parallel distribution approach
 /// @param numThreads the number of threads to use
@@ -107,4 +103,4 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
 /// @param rank a sequential process id (zero indexed)
 /// @param workPerProcess a vector of size numProcesses where each entry denotes the number of rows that process is to compute dot products for
 /// @param offsets a vector of size numProcesses where each entry denotes the starting row number (inclusive) of that process to compute dot products from
-void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets);
+void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float32_t**& mats, std::float32_t*& vec, std::float32_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets);

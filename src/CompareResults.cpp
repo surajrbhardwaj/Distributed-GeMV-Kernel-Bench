@@ -17,9 +17,9 @@ int main() {
     bool succeeded = true;
 
     for (int i = 0; i < 32768; i++) {
-        std::float16_t v1{}, v2{};
-        if (!f1.read(reinterpret_cast<char*>(&v1), sizeof(std::float16_t)) ||
-            !f2.read(reinterpret_cast<char*>(&v2), sizeof(std::float16_t))) {
+        std::float32_t v1{}, v2{};
+        if (!f1.read(reinterpret_cast<char*>(&v1), sizeof(std::float32_t)) ||
+            !f2.read(reinterpret_cast<char*>(&v2), sizeof(std::float32_t))) {
             std::cerr << "Premature EOF or read failure at index " << i << '\n';
             return 1;
         }

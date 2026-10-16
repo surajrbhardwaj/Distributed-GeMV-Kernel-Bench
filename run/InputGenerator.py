@@ -46,13 +46,13 @@ if __name__ == "__main__":
         limit = np.sqrt(3.0 / N)
         with open(args.fileName, "wb") as f:
             for _ in range(M):
-                row = np.random.uniform(-1*limit, limit, size=N).astype(np.float16)
+                row = np.random.uniform(-1*limit, limit, size=N).astype(np.float32)
                 row.tofile(f)
 
     elif matrixOrVector == "vector":
         N = args.N
         with open(args.fileName, "wb") as f:
-            np.random.uniform(-1.0, 1.0, size=N).astype(np.float16).tofile(f)
+            np.random.uniform(-1.0, 1.0, size=N).astype(np.float32).tofile(f)
 
     else:
         print("invalid input --type must be either matrix or vector")

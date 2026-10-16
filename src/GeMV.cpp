@@ -49,16 +49,16 @@ double timeval_to_sec(const struct timeval& tv) {
     return static_cast<double>(tv.tv_sec) + (static_cast<double>(tv.tv_usec) * 1e-6);
 }
 
-void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t xDim, const std::float16_t* __restrict__ matrix, const std::float16_t* __restrict__ vector, std::float16_t* __restrict__  results) {
+void GeMV_kernel(const uint32_t work, const uint32_t offset, const uint32_t xDim, const std::float32_t* __restrict__ matrix, const std::float32_t* __restrict__ vector, std::float32_t* __restrict__  results) {
     std::float32_t sum;
     uint32_t localOffset = offset * xDim;
     uint32_t endIndex = offset+work;
     for(uint32_t w=offset; w<endIndex; w++) {
         sum = 0.0f;
         for(uint32_t i=0; i<xDim; i++) {
-            sum += static_cast<std::float32_t>(matrix[localOffset + i])*static_cast<std::float32_t>(vector[i]);
+            sum += matrix[localOffset + i]*vector[i];
         }
-        results[w] = static_cast<std::float16_t>(sum);
+        results[w] = sum;
         localOffset += xDim;
     }
 }
@@ -73,11 +73,11 @@ void threadLoop(ThreadData* data) {
     }
 }
 
-void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result) {
+void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float32_t**& mats, std::float32_t*& vec, std::float32_t*& result) {
     std::ifstream vectorFile("in/vector.vec", std::ios::binary);
-    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*yDim);
+    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float32_t)*yDim);
 
-    const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
+    const size_t dataSize = sizeof(std::float32_t) * xDim * yDim;
     for(int i=0; i<NUM_MATRICES; i++) {
         int fd = open(("./in/matrix" + std::to_string(i+1) + ".mat").c_str(), O_RDONLY);
         if (fd == -1) {std::cout << "error opening one of the input files" << std::endl; exit(-1);}
@@ -88,7 +88,7 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
         }
         close(fd);
         madvise(mapped, dataSize, MADV_SEQUENTIAL);
-        mats[i] = reinterpret_cast<std::float16_t*>(static_cast<char*>(mapped));
+        mats[i] = reinterpret_cast<std::float32_t*>(static_cast<char*>(mapped));
     }
     for(int i=0; i<5; i++) {
         madvise(mats[i], dataSize, MADV_WILLNEED);
@@ -122,7 +122,7 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
         }
         madvise(mats[i], dataSize, MADV_DONTNEED);
 
-        std::float16_t* temp = vec;
+        std::float32_t* temp = vec;
         vec = result;
         result = temp;
     }
@@ -140,18 +140,18 @@ void GeMV_Serial(const uint8_t numThreads, const uint32_t xDim, const uint32_t y
     }
 
     if(NUM_MATRICES%2==0) {
-        std::float16_t* temp = vec;
+        std::float32_t* temp = vec;
         vec = result;
         result = temp;
     }
 }
 
 // TODO: should actually only be calling madvise on the sections that we are actually going to access (not on the whole matrix)
-void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
+void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float32_t**& mats, std::float32_t*& vec, std::float32_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
     std::ifstream vectorFile("in/vector.vec", std::ios::binary);
-    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
+    vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float32_t)*xDim);
 
-    const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
+    const size_t dataSize = sizeof(std::float32_t) * xDim * yDim;
     std::vector<void*> originalMatrixPointers(NUM_MATRICES, nullptr);
     for(int i=0; i<NUM_MATRICES; i++) {
         int fd = open(("./in/matrix" + std::to_string(i+1) + ".mat").c_str(), O_RDONLY);
@@ -164,7 +164,7 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
         close(fd);
         madvise(originalMatrixPointers[i], dataSize, MADV_SEQUENTIAL);
         if(i<5) {madvise(originalMatrixPointers[i], dataSize, MADV_WILLNEED);}
-        mats[i] = reinterpret_cast<std::float16_t*>(static_cast<char*>(originalMatrixPointers[i]) + offsets[rank]*xDim*sizeof(std::float16_t));
+        mats[i] = reinterpret_cast<std::float32_t*>(static_cast<char*>(originalMatrixPointers[i]) + offsets[rank]*xDim*sizeof(std::float32_t));
     }
 
     std::thread threads[numThreads];
@@ -200,11 +200,11 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
         madvise(originalMatrixPointers[i], dataSize, MADV_DONTNEED);
 
         // gather the results on each node
-        MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_FLOAT16, MPI_COMM_WORLD);
+        MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, result, workPerProcess.data(), offsets.data(), MPI_FLOAT, MPI_COMM_WORLD);
         T_mpiEnd = MPI_Wtime();
         T_mpiOverhead += (T_mpiEnd - T_mpiStart);
 
-        std::float16_t* temp = vec;
+        std::float32_t* temp = vec;
         vec = result;
         result = temp;
     }
@@ -222,15 +222,15 @@ void GeMV_TensorParallel(const uint8_t numThreads, const uint32_t xDim, const ui
     }
 
     if(NUM_MATRICES%2==0) {
-        std::float16_t* temp = vec;
+        std::float32_t* temp = vec;
         vec = result;
         result = temp;
     }
     std::cout << "MPI Overhead (seconds): " << T_mpiOverhead << std::endl;
 }
 
-void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float16_t**& mats, std::float16_t*& vec, std::float16_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
-    const size_t dataSize = sizeof(std::float16_t) * xDim * yDim;
+void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const uint32_t yDim, std::float32_t**& mats, std::float32_t*& vec, std::float32_t*& result, int rank, const std::vector<int>& workPerProcess, const std::vector<int>& offsets) {
+    const size_t dataSize = sizeof(std::float32_t) * xDim * yDim;
     std::vector<void*> originalMatrixPointers(workPerProcess[rank], nullptr);
     for(int i=0; i<workPerProcess[rank]; i++) {
         int fd = open(("./in/matrix" + std::to_string(i+offsets[rank]+1) + ".mat").c_str(), O_RDONLY);
@@ -242,15 +242,15 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
         }
         close(fd);
         madvise(originalMatrixPointers[i], dataSize, MADV_SEQUENTIAL);
-        mats[i] = reinterpret_cast<std::float16_t*>(originalMatrixPointers[i]);
+        mats[i] = reinterpret_cast<std::float32_t*>(originalMatrixPointers[i]);
     }
 
     if(rank==0) {
         std::ifstream vectorFile("in/vector.vec", std::ios::binary);
-        vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float16_t)*xDim);
+        vectorFile.read(reinterpret_cast<char*>(vec), sizeof(std::float32_t)*xDim);
     }
     else {
-        MPI_Recv(vec, yDim, MPI_FLOAT16, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(vec, yDim, MPI_FLOAT, rank-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     std::thread threads[numThreads];
@@ -277,7 +277,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
         }
 
         if(i+1!=workPerProcess[rank]) {
-            std::float16_t* temp = vec;
+            std::float32_t* temp = vec;
             vec = result;
             result = temp;
         }
@@ -285,7 +285,7 @@ void GeMV_PipelineParallel(const uint8_t numThreads, const uint32_t xDim, const 
 
     if(rank+1<workPerProcess.size()) {
         double T_mpiStart = MPI_Wtime();
-        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT16, rank+1, 0, MPI_COMM_WORLD);
+        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT, rank+1, 0, MPI_COMM_WORLD);
         double T_mpiEnd = MPI_Wtime();
 
         std::cout << "MPI Overhead (seconds): " << (T_mpiEnd-T_mpiStart) << std::endl;

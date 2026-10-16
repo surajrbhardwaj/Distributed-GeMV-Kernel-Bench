@@ -40,10 +40,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::float16_t** mats = new std::float16_t*[workPerProcess[rank]];
-    std::float16_t* vec = new std::float16_t[xDim];
+    std::float32_t** mats = new std::float32_t*[workPerProcess[rank]];
+    std::float32_t* vec = new std::float32_t[xDim];
 
-    std::float16_t* result = new std::float16_t[yDim];
+    std::float32_t* result = new std::float32_t[yDim];
 
     auto wall_start = std::chrono::steady_clock::now();
     GeMV_PipelineParallel(numThreads, xDim, yDim, mats, vec, result, rank, workPerProcess, offsets);
@@ -51,13 +51,13 @@ int main(int argc, char** argv) {
     double T_wall = std::chrono::duration<double>(wall_end - wall_start).count();
 
     if(rank==0) {
-        MPI_Recv(result, xDim, MPI_FLOAT16, numProcesses-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(result, xDim, MPI_FLOAT, numProcesses-1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         std::ofstream out("./out/output.vec", std::ios::binary | std::ios::out | std::ios::trunc);
         if (!out.is_open()) {
             std::cerr << "Failed to open output.vec for writing.\n";
             return -1;
         }
-        std::size_t bytes_to_write = yDim * sizeof(std::float16_t);
+        std::size_t bytes_to_write = yDim * sizeof(std::float32_t);
         out.write(reinterpret_cast<const char*>(result), bytes_to_write);
         if(!out) {
             std::cerr << "Error occurred while writing to output.vec.\n";
@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
     }
     else if(rank==numProcesses-1) {
         double T_mpiStart=MPI_Wtime();
-        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT16, 0, 0, MPI_COMM_WORLD);
+        MPI_Ssend(result, static_cast<int>(yDim), MPI_FLOAT, 0, 0, MPI_COMM_WORLD);
         double T_mpiEnd=MPI_Wtime();
 
         std::cout << "MPI Overhead (seconds): " << (T_mpiEnd-T_mpiStart) << std::endl;
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     double avg_idle_time = T_wall - (T_active / static_cast<int>(numThreads));
     std::cout << "Idle Time (seconds): " << avg_idle_time << std::endl;
 
-    double bandwidth = (xDim*yDim*sizeof(std::float16_t)*NUM_MATRICES)/(T_wall*1e9);
+    double bandwidth = (xDim*yDim*sizeof(std::float32_t)*NUM_MATRICES)/(T_wall*1e9);
     std::cout << "Achieved Memory Bandwidth (GB/s): " << bandwidth << std::endl;
 
     delete[] mats;
