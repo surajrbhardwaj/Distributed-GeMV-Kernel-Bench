@@ -38,6 +38,8 @@ parser.add_argument(
 if __name__ == "__main__":
     args = parser.parse_args()
 
+    np.random.seed(42)
+
     matrixOrVector = args.type.lower()
     if matrixOrVector == 'matrix':
         M = args.M
