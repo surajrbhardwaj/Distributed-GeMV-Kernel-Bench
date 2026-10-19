@@ -1,0 +1,28 @@
+MPI Overhead (seconds): 5.16545
+MPI Overhead (seconds): 0.0143433
+MPI Overhead (seconds): 0.0145809
+Maximum RAM Usage (bytes): 21152956000
+Wall Clock Time (seconds): 14.146
+User Time (seconds): 2.13624
+System Time (seconds): 14.4319
+Idle Time (seconds): 5.86188
+Achieved Memory Bandwidth (GB/s): 6.07236
+Maximum RAM Usage (bytes): 21154688000
+Wall Clock Time (seconds): 14.9227
+User Time (seconds): 5.27665
+System Time (seconds): 12.285
+Idle Time (seconds): 6.14188
+Achieved Memory Bandwidth (GB/s): 5.75628
+MPI Overhead (seconds): 0.0126224
+Maximum RAM Usage (bytes): 21154612000
+Wall Clock Time (seconds): 12.1485
+User Time (seconds): 9.68807
+System Time (seconds): 7.13529
+Idle Time (seconds): 3.7368
+Achieved Memory Bandwidth (GB/s): 7.07079
+Maximum RAM Usage (bytes): 21143360000
+Wall Clock Time (seconds): 15.3923
+User Time (seconds): 8.53067
+System Time (seconds): 8.29918
+Idle Time (seconds): 6.97742
+Achieved Memory Bandwidth (GB/s): 5.58065

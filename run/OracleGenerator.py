@@ -9,13 +9,13 @@ M = int(sys.argv[1])
 N = int(sys.argv[2])
 
 # 1. Read input vector (M and N must be equal for chained GeMV)
-vec = np.fromfile("inputs/vector.vec", dtype=np.float32)
+vec = np.fromfile("in/vector.vec", dtype=np.float32)
 if vec.size != N:
     raise ValueError(f"Vector size ({vec.size}) does not match N ({N})")
 
 # 2. Iterate through matrix1.mat to matrix20.mat
 for i in range(1, 21):
-    mat_path = f"inputs/matrix{i}.mat"
+    mat_path = f"in/matrix{i}.mat"
 
     # Read row-major binary matrix
     mat = np.fromfile(mat_path, dtype=np.float32).reshape((M, N))

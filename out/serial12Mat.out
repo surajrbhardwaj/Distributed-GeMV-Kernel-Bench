@@ -1,0 +1,24 @@
+numThreads = 8
+starting computations
+loading matrices
+initializing thread pool
+actually starting computations
+starting matrix 0
+starting matrix 1
+starting matrix 2
+starting matrix 3
+starting matrix 4
+starting matrix 5
+starting matrix 6
+starting matrix 7
+starting matrix 8
+starting matrix 9
+starting matrix 10
+starting matrix 11
+done computing
+Maximum RAM Usage (bytes): 4200448000
+Wall Clock Time (seconds): 14.6758
+User Time (seconds): 8.9415
+System Time (seconds): 35.1148
+Idle Time (seconds): 9.16872
+Achieved Memory Bandwidth (GB/s): 3.51189
